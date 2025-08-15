@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>化学必背元素匹配游戏</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- 配置Tailwind自定义颜色 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',      // 主色调-蓝色（符号卡片）
+                        secondary: '#f97316',    // 辅助色-橙色（名称卡片）
+                        warning: '#ef4444',      // 警告色-红色（倒计时警告）
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <!-- 自定义工具类 -->
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .card-selected {
+                transform: scale(1.08);
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            }
+            .card-matched {
+                animation: pulse 0.5s;
+            }
+            .timer-warning {
+                animation: warning 1s infinite alternate;
+            }
+            .container {
+                max-width: 540px;  /* 手机模式最大宽度 */
+            }
+            @keyframes pulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.15); }
+            }
+            @keyframes warning {
+                from { color: #ef4444; }
+                to { color: #dc2626; }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen font-sans">
+    <!-- 限制最大宽度以适应手机设备，居中显示 -->
+    <div class="container mx-auto px-3 sm:px-4 py-5">
+        <!-- 游戏标题和信息 -->
+        <header class="text-center mb-5">
+            <h1 class="text-[clamp(1.3rem,4vw,2rem)] font-bold text-gray-800 mb-2 tracking-tight">
+                化学必背元素<span class="text-primary">匹配游戏</span>
+            </h1>
+            <p class="text-gray-600 text-sm sm:text-base mb-4 max-w-2xl mx-auto">
+                匹配元素符号与中文名称，提升化学学习效率
+            </p>
+            
+            <!-- 游戏设置区域 -->
+            <div class="mb-5 bg-white rounded-lg shadow-md p-3 max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+                <!-- 元素数量选择器 -->
+                <div>
+                    <label for="elementCount" class="block text-gray-700 text-sm font-medium mb-1.5">选择元素数量:</label>
+                    <div class="flex items-center">
+                        <select id="elementCount" class="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                            <option value="5">5种元素</option>
+                            <option value="10">10种元素</option>
+                            <option value="15">15种元素</option>
+                            <option value="20">20种元素</option>
+                            <option value="25" selected>25种元素</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- 计时方式选择器 -->
+                <div>
+                    <label for="timingMode" class="block text-gray-700 text-sm font-medium mb-1.5">选择计时方式:</label>
+                    <div class="flex items-center">
+                        <select id="timingMode" class="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                            <option value="timed">计时模式</option>
+                            <option value="countdown">倒计时模式</option>
+                            <option value="untimed">无计时模式</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- 倒计时时长设置 -->
+                <div id="countdownSettings">
+                    <label for="countdownDuration" class="block text-gray-700 text-sm font-medium mb-1.5">倒计时时长(秒):</label>
+                    <div class="flex items-center">
+                        <input type="number" id="countdownDuration" min="30" max="300" value="120" 
+                               class="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap justify-center gap-2 sm:gap-3 mb-5">
+                <div id="timerContainer" class="bg-white rounded-lg shadow-md px-3 py-2 flex items-center text-sm">
+                    <i class="fa fa-clock-o text-primary mr-1.5"></i>
+                    <span class="text-gray-700" id="timerLabel">时间: </span>
+                    <span id="timer" class="font-semibold ml-1.5">00:00</span>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-md px-3 py-2 flex items-center text-sm">
+                    <i class="fa fa-hand-pointer-o text-primary mr-1.5"></i>
+                    <span class="text-gray-700">尝试次数: </span>
+                    <span id="attempts" class="font-semibold ml-1.5">0</span>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow-md px-3 py-2 flex items-center text-sm">
+                    <i class="fa fa-check-circle text-primary mr-1.5"></i>
+                    <span class="text-gray-700">匹配: </span>
+                    <span id="matches" class="font-semibold ml-1.5">0/0</span>
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap justify-center gap-3">
+                <button id="startBtn" class="bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2 px-5 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 focus:outline-none">
+                    开始游戏
+                </button>
+                <button id="historyBtn" class="bg-gray-700 hover:bg-gray-800 text-white text-sm font-bold py-2 px-5 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 focus:outline-none">
+                    查看历史
+                </button>
+            </div>
+        </header>
+        
+        <!-- 游戏区域 - 中文在左，符号在右，每行5个 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            <!-- 左侧：中文名称卡片区域 -->
+            <div id="nameContainer" class="opacity-50 pointer-events-none transition-opacity duration-500">
+                <h2 class="text-sm sm:text-base font-semibold text-secondary mb-3 text-center">元素名称</h2>
+                <div class="grid grid-cols-5 gap-1.5">
+                    <!-- 中文名称卡片将通过JavaScript动态生成 -->
+                </div>
+            </div>
+            
+            <!-- 右侧：元素符号卡片区域 -->
+            <div id="symbolContainer" class="opacity-50 pointer-events-none transition-opacity duration-500">
+                <h2 class="text-sm sm:text-base font-semibold text-primary mb-3 text-center">元素符号</h2>
+                <div class="grid grid-cols-5 gap-1.5">
+                    <!-- 元素符号卡片将通过JavaScript动态生成 -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- 游戏结束弹窗 -->
+        <div id="gameOverModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-xl shadow-2xl p-5 sm:p-6 max-w-md w-full mx-3 transform transition-all duration-300 scale-95 opacity-0" id="modalContent">
+                <div class="text-center mb-3">
+                    <div id="gameOverIcon" class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-3">
+                        <i class="fa fa-trophy text-2xl text-yellow-500"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-gray-800 mb-1.5" id="gameOverTitle">恭喜你！</h2>
+                    <p class="text-gray-600 text-sm" id="completionText">你已完成所有元素的匹配</p>
+                </div>
+                
+                <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                    <div id="finalTimeContainer" class="flex justify-between mb-2 pb-2 border-b border-gray-100">
+                        <span class="text-gray-600 text-sm">用时/剩余时间:</span>
+                        <span id="finalTime" class="font-semibold text-gray-800 text-sm">00:00</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600 text-sm">尝试次数:</span>
+                        <span id="finalAttempts" class="font-semibold text-gray-800 text-sm">0</span>
+                    </div>
+                    <div class="flex justify-between mt-2 pt-2 border-t border-gray-100">
+                        <span class="text-gray-600 text-sm">元素数量:</span>
+                        <span id="finalElementCount" class="font-semibold text-gray-800 text-sm">0</span>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col gap-2">
+                    <button id="closeResultBtn" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 focus:outline-none">
+                        返回主页
+                    </button>
+                    <button id="playAgainBtn" class="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 focus:outline-none">
+                        再玩一次
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 再玩一次确认弹窗 -->
+        <div id="playAgainConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-xl shadow-2xl p-5 max-w-md w-full mx-3 transform transition-all duration-300 scale-95 opacity-0" id="playAgainModalContent">
+                <div class="text-center mb-4">
+                    <h2 class="text-lg font-bold text-gray-800 mb-2">准备开始新游戏</h2>
+                    <p class="text-gray-600 text-sm">请确认你的游戏设置，然后点击开始</p>
+                </div>
+                
+                <button id="confirmStartBtn" class="w-full bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2 px-4 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 focus:outline-none">
+                    开始游戏
+                </button>
+            </div>
+        </div>
+        
+        <!-- 历史记录弹窗 -->
+        <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-xl shadow-2xl p-5 max-w-2xl w-full mx-3 max-h-[70vh] overflow-hidden flex flex-col" id="historyModalContent">
+                <div class="text-center mb-3">
+                    <h2 class="text-lg font-bold text-gray-800 mb-1.5">游戏历史记录</h2>
+                    <p class="text-gray-600 text-sm">所有游戏结果记录（成功/失败）</p>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto mb-4 text-sm">
+                    <div id="historyList" class="space-y-3">
+                        <!-- 历史记录将通过JavaScript动态生成 -->
+                        <div class="text-center text-gray-500 py-6 text-sm" id="emptyHistory">
+                            暂无历史记录
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button id="clearHistoryBtn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-bold py-2 px-3 rounded-lg shadow-md transition-all duration-300 focus:outline-none">
+                        清空记录
+                    </button>
+                    <button id="closeHistoryBtn" class="flex-1 bg-primary hover:bg-primary/90 text-white text-sm font-bold py-2 px-3 rounded-lg shadow-md transition-all duration-300 focus:outline-none">
+                        关闭
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="text-center text-gray-500 text-xs py-3">
+            <p>化学必背元素匹配游戏 | 基于九年级暑假学习资料</p>
+        </footer>
+    </div>
+
+    <script>
+        // 从文档中提取的必背元素数据
+        const elements = [
+            { symbol: 'H', name: '氢' },
+            { symbol: 'He', name: '氦' },
+            { symbol: 'Li', name: '锂' },
+            { symbol: 'Be', name: '铍' },
+            { symbol: 'B', name: '硼' },
+            { symbol: 'C', name: '碳' },
+            { symbol: 'N', name: '氮' },
+            { symbol: 'O', name: '氧' },
+            { symbol: 'F', name: '氟' },
+            { symbol: 'Ne', name: '氖' },
+            { symbol: 'Na', name: '钠' },
+            { symbol: 'Mg', name: '镁' },
+            { symbol: 'Al', name: '铝' },
+            { symbol: 'Si', name: '硅' },
+            { symbol: 'P', name: '磷' },
+            { symbol: 'S', name: '硫' },
+            { symbol: 'Cl', name: '氯' },
+            { symbol: 'Ar', name: '氩' },
+            { symbol: 'K', name: '钾' },
+            { symbol: 'Ca', name: '钙' },
+            { symbol: 'Mn', name: '锰' },
+            { symbol: 'Fe', name: '铁' },
+            { symbol: 'Cu', name: '铜' },
+            { symbol: 'Zn', name: '锌' },
+            { symbol: 'Ag', name: '银' },
+            { symbol: 'I', name: '碘' },
+            { symbol: 'Ba', name: '钡' },
+            { symbol: 'Hg', name: '汞' }
+        ];
+
+        // 游戏状态
+        const gameState = {
+            isPlaying: false,
+            selectedCards: [],
+            matchedPairs: 0,
+            totalPairs: 0, // 将由用户选择
+            attempts: 0,
+            timer: null,
+            seconds: 0,
+            countdownSeconds: 0, // 倒计时剩余秒数
+            originalCountdown: 0, // 初始倒计时秒数
+            timingMode: 'timed', // 计时模式：timed/countdown/untimed
+            currentElements: [], // 当前游戏使用的元素
+            gameStartTime: null, // 游戏开始时间戳
+            isReset: false // 标记游戏是否已重置
+        };
+
+        // DOM 元素
+        const nameContainer = document.getElementById('nameContainer').querySelector('div');
+        const symbolContainer = document.getElementById('symbolContainer').querySelector('div');
+        const startBtn = document.getElementById('startBtn');
+        const historyBtn = document.getElementById('historyBtn');
+        const timerDisplay = document.getElementById('timer');
+        const timerLabel = document.getElementById('timerLabel');
+        const timerContainer = document.getElementById('timerContainer');
+        const attemptsDisplay = document.getElementById('attempts');
+        const matchesDisplay = document.getElementById('matches');
+        const gameOverModal = document.getElementById('gameOverModal');
+        const modalContent = document.getElementById('modalContent');
+        const finalTime = document.getElementById('finalTime');
+        const finalTimeContainer = document.getElementById('finalTimeContainer');
+        const finalAttempts = document.getElementById('finalAttempts');
+        const finalElementCount = document.getElementById('finalElementCount');
+        const playAgainBtn = document.getElementById('playAgainBtn');
+        const closeResultBtn = document.getElementById('closeResultBtn');
+        const elementCountSelect = document.getElementById('elementCount');
+        const timingModeSelect = document.getElementById('timingMode');
+        const countdownSettings = document.getElementById('countdownSettings');
+        const countdownDuration = document.getElementById('countdownDuration');
+        const completionText = document.getElementById('completionText');
+        const gameOverTitle = document.getElementById('gameOverTitle');
+        const gameOverIcon = document.getElementById('gameOverIcon');
+        const historyModal = document.getElementById('historyModal');
+        const historyModalContent = document.getElementById('historyModalContent');
+        const historyList = document.getElementById('historyList');
+        const emptyHistory = document.getElementById('emptyHistory');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+        const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+        const playAgainConfirmModal = document.getElementById('playAgainConfirmModal');
+        const playAgainModalContent = document.getElementById('playAgainModalContent');
+        const confirmStartBtn = document.getElementById('confirmStartBtn');
+
+        // 事件监听器
+        startBtn.addEventListener('click', handleStartButton);
+        playAgainBtn.addEventListener('click', showPlayAgainConfirm);
+        closeResultBtn.addEventListener('click', closeGameResult);
+        confirmStartBtn.addEventListener('click', startNewGameFromConfirm);
+        historyBtn.addEventListener('click', showHistory);
+        closeHistoryBtn.addEventListener('click', hideHistory);
+        clearHistoryBtn.addEventListener('click', clearHistory);
+        timingModeSelect.addEventListener('change', toggleCountdownSettings);
+
+        // 初始化页面
+        function init() {
+            toggleCountdownSettings();
+            loadHistory();
+        }
+
+        // 显示再玩一次确认弹窗
+        function showPlayAgainConfirm() {
+            // 隐藏游戏结果弹窗
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                gameOverModal.classList.add('hidden');
+                
+                // 显示确认弹窗
+                playAgainConfirmModal.classList.remove('hidden');
+                setTimeout(() => {
+                    playAgainModalContent.classList.remove('scale-95', 'opacity-0');
+                    playAgainModalContent.classList.add('scale-100', 'opacity-100');
+                }, 10);
+            }, 300);
+        }
+
+        // 从确认弹窗开始新游戏
+        function startNewGameFromConfirm() {
+            // 隐藏确认弹窗
+            playAgainModalContent.classList.remove('scale-100', 'opacity-100');
+            playAgainModalContent.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                playAgainConfirmModal.classList.add('hidden');
+                startGame();
+            }, 300);
+        }
+
+        // 关闭游戏结果弹窗，返回主页
+        function closeGameResult() {
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                gameOverModal.classList.add('hidden');
+                resetGameState();
+            }, 300);
+        }
+
+        // 处理开始按钮点击
+        function handleStartButton() {
+            if (gameState.isReset || !gameState.isPlaying) {
+                // 如果游戏已重置或未开始，则开始新游戏
+                startGame();
+            } else {
+                // 否则重置游戏
+                resetGameState();
+            }
+        }
+
+        // 切换倒计时设置显示状态
+        function toggleCountdownSettings() {
+            if (timingModeSelect.value === 'countdown') {
+                countdownSettings.classList.remove('hidden');
+            } else {
+                countdownSettings.classList.add('hidden');
+            }
+        }
+
+        // 开始游戏
+        function startGame() {
+            // 获取用户选择的参数
+            const selectedCount = parseInt(elementCountSelect.value);
+            const selectedTimingMode = timingModeSelect.value;
+            const selectedCountdown = parseInt(countdownDuration.value);
+            
+            // 验证倒计时值
+            if (selectedTimingMode === 'countdown' && (isNaN(selectedCountdown) || selectedCountdown < 30)) {
+                alert('请设置至少30秒的倒计时');
+                return;
+            }
+            
+            // 重置游戏状态
+            resetGameState(true);
+            
+            // 设置游戏参数
+            gameState.totalPairs = selectedCount;
+            gameState.timingMode = selectedTimingMode;
+            gameState.originalCountdown = selectedCountdown;
+            gameState.countdownSeconds = selectedCountdown;
+            matchesDisplay.textContent = `0/${gameState.totalPairs}`;
+            
+            // 记录游戏开始时间
+            gameState.gameStartTime = new Date();
+            
+            // 显示或隐藏计时器并更新标签
+            if (gameState.timingMode === 'untimed') {
+                timerContainer.classList.add('hidden');
+                finalTimeContainer.classList.add('hidden');
+            } else {
+                timerContainer.classList.remove('hidden');
+                finalTimeContainer.classList.remove('hidden');
+                
+                // 更新计时器标签
+                if (gameState.timingMode === 'countdown') {
+                    timerLabel.textContent = '剩余时间: ';
+                    updateTimerDisplay(); // 显示初始倒计时
+                } else {
+                    timerLabel.textContent = '已用时间: ';
+                    timerDisplay.classList.remove('timer-warning');
+                }
+            }
+            
+            // 从元素中随机选择指定数量的元素
+            gameState.currentElements = selectRandomElements(selectedCount);
+            
+            // 启用游戏区域
+            nameContainer.parentElement.classList.remove('opacity-50', 'pointer-events-none');
+            symbolContainer.parentElement.classList.remove('opacity-50', 'pointer-events-none');
+            
+            // 创建卡片对 - 中文在左，符号在右
+            createNameCards();
+            createSymbolCards();
+            
+            // 添加卡片进入动画
+            setTimeout(() => {
+                const cards = document.querySelectorAll('.game-card');
+                cards.forEach((card, index) => {
+                    setTimeout(() => {
+                        card.classList.add('opacity-100', 'translate-y-0');
+                        card.classList.remove('opacity-0', 'translate-y-4');
+                    }, index * 20);
+                });
+            }, 100);
+            
+            // 开始计时（根据选择的模式）
+            if (gameState.timingMode === 'timed') {
+                startStopwatch();
+            } else if (gameState.timingMode === 'countdown') {
+                startCountdown();
+            }
+            
+            // 更新按钮文本
+            startBtn.textContent = '重置游戏';
+            
+            // 游戏开始
+            gameState.isPlaying = true;
+            gameState.isReset = false;
+        }
+
+        // 从元素列表中选择随机元素
+        function selectRandomElements(count) {
+            // 复制元素数组并打乱顺序
+            const shuffled = [...elements].sort(() => 0.5 - Math.random());
+            
+            // 返回前count个元素
+            return shuffled.slice(0, count);
+        }
+
+        // 创建中文名称卡片（左侧）
+        function createNameCards() {
+            // 清空容器
+            nameContainer.innerHTML = '';
+            
+            // 为每个元素创建名称卡片
+            gameState.currentElements.forEach(element => {
+                const card = {
+                    type: 'name',
+                    content: element.name,
+                    symbol: element.symbol,
+                    id: `name-${element.symbol}`
+                };
+                
+                createCardElement(card, nameContainer);
+            });
+        }
+
+        // 创建元素符号卡片（右侧）
+        function createSymbolCards() {
+            // 清空容器
+            symbolContainer.innerHTML = '';
+            
+            // 打乱元素顺序再创建符号卡片，增加难度
+            const shuffledElements = [...gameState.currentElements].sort(() => 0.5 - Math.random());
+            
+            // 为每个元素创建符号卡片
+            shuffledElements.forEach(element => {
+                const card = {
+                    type: 'symbol',
+                    content: element.symbol,
+                    symbol: element.symbol,
+                    id: `symbol-${element.symbol}`
+                };
+                
+                createCardElement(card, symbolContainer);
+            });
+        }
+
+        // 重置游戏状态
+        function resetGameState(softReset = false) {
+            // 清空游戏容器
+            nameContainer.innerHTML = '';
+            symbolContainer.innerHTML = '';
+            
+            // 重置游戏状态
+            gameState.isPlaying = false;
+            gameState.selectedCards = [];
+            gameState.matchedPairs = 0;
+            gameState.attempts = 0;
+            gameState.seconds = 0;
+            gameState.countdownSeconds = 0;
+            gameState.gameStartTime = null;
+            
+            // 重置显示
+            attemptsDisplay.textContent = '0';
+            timerDisplay.textContent = '00:00';
+            timerDisplay.classList.remove('timer-warning');
+            
+            // 清除计时器
+            if (gameState.timer) {
+                clearInterval(gameState.timer);
+                gameState.timer = null;
+            }
+            
+            // 隐藏模态框
+            gameOverModal.classList.add('hidden');
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            
+            // 如果不是软重置（即用户主动点击重置按钮）
+            if (!softReset) {
+                // 禁用游戏区域
+                nameContainer.parentElement.classList.add('opacity-50', 'pointer-events-none');
+                symbolContainer.parentElement.classList.add('opacity-50', 'pointer-events-none');
+                
+                // 更新按钮文本
+                startBtn.textContent = '开始游戏';
+                
+                // 标记为已重置
+                gameState.isReset = true;
+            }
+        }
+
+        // 创建卡片元素 - 增大字体大小
+        function createCardElement(card, container) {
+            const cardElement = document.createElement('div');
+            // 调整卡片尺寸以适应每行5个的布局，同时增大字体
+            cardElement.className = 'game-card w-full aspect-square rounded-lg shadow-md flex items-center justify-center p-0.5 transition-all duration-300 cursor-pointer opacity-0 translate-y-4 border-2 bg-white text-gray-800';
+            cardElement.dataset.id = card.id;
+            cardElement.dataset.symbol = card.symbol;
+            cardElement.dataset.type = card.type;
+            
+            // 为不同类型卡片设置不同背景色
+            if (card.type === 'symbol') {
+                cardElement.classList.add('bg-primary/10', 'border-primary/30');
+            } else {
+                cardElement.classList.add('bg-secondary/10', 'border-secondary/30');
+            }
+            
+            // 卡片内容 - 增大字体大小，从text-[10px]调整为text-xs sm:text-sm
+            const contentText = document.createElement('div');
+            contentText.className = 'text-center font-bold text-xs sm:text-sm';
+            contentText.textContent = card.content;
+            cardElement.appendChild(contentText);
+            
+            // 添加点击事件
+            cardElement.addEventListener('click', () => selectCard(cardElement));
+            
+            // 添加到指定容器
+            container.appendChild(cardElement);
+        }
+
+        // 选择卡片
+        function selectCard(cardElement) {
+            // 如果游戏未开始，不执行任何操作
+            if (!gameState.isPlaying) return;
+            
+            // 如果卡片已经匹配，不执行任何操作
+            if (cardElement.classList.contains('matched')) return;
+            
+            // 如果已经选择了这张卡片，不执行任何操作
+            if (gameState.selectedCards.some(card => card.element === cardElement)) return;
+            
+            // 如果已经选择了两张卡片，不执行任何操作
+            if (gameState.selectedCards.length >= 2) return;
+            
+            // 选中卡片效果
+            cardElement.classList.add('card-selected', 'z-10');
+            
+            // 将卡片添加到已选择列表
+            gameState.selectedCards.push({
+                element: cardElement,
+                symbol: cardElement.dataset.symbol,
+                type: cardElement.dataset.type
+            });
+            
+            // 如果选择了两张卡片，检查是否匹配
+            if (gameState.selectedCards.length === 2) {
+                // 确保选择的是不同类型的卡片（一个符号和一个名称）
+                if (gameState.selectedCards[0].type !== gameState.selectedCards[1].type) {
+                    checkForMatch();
+                    
+                    // 增加尝试次数
+                    gameState.attempts++;
+                    attemptsDisplay.textContent = gameState.attempts;
+                } else {
+                    // 选择了同一类型的卡片，自动取消选择
+                    setTimeout(() => {
+                        gameState.selectedCards.forEach(card => {
+                            card.element.classList.remove('card-selected', 'z-10');
+                        });
+                        gameState.selectedCards = [];
+                    }, 500);
+                }
+            }
+        }
+
+        // 检查是否匹配
+        function checkForMatch() {
+            const [card1, card2] = gameState.selectedCards;
+            
+            // 检查是否是同一元素的不同类型卡片
+            if (card1.symbol === card2.symbol) {
+                // 匹配成功
+                setTimeout(() => {
+                    // 添加匹配成功效果
+                    card1.element.classList.add('matched', 'card-matched', 'ring-2', 'ring-green-500', 'bg-green-50');
+                    card2.element.classList.add('matched', 'card-matched', 'ring-2', 'ring-green-500', 'bg-green-50');
+                    
+                    // 移除选中效果但保持z-index
+                    card1.element.classList.remove('card-selected');
+                    card2.element.classList.remove('card-selected');
+                    
+                    // 移除点击事件
+                    card1.element.style.pointerEvents = 'none';
+                    card2.element.style.pointerEvents = 'none';
+                    
+                    // 清空已选择卡片列表
+                    gameState.selectedCards = [];
+                    
+                    // 增加匹配计数
+                    gameState.matchedPairs++;
+                    matchesDisplay.textContent = `${gameState.matchedPairs}/${gameState.totalPairs}`;
+                    
+                    // 检查游戏是否结束
+                    if (gameState.matchedPairs === gameState.totalPairs) {
+                        endGame(true);
+                    }
+                }, 500);
+            } else {
+                // 匹配失败
+                setTimeout(() => {
+                    // 添加错误效果
+                    card1.element.classList.add('ring-2', 'ring-red-500');
+                    card2.element.classList.add('ring-2', 'ring-red-500');
+                    
+                    // 短暂延迟后取消选择
+                    setTimeout(() => {
+                        // 移除所有效果
+                        card1.element.classList.remove('card-selected', 'ring-2', 'ring-red-500', 'z-10');
+                        card2.element.classList.remove('card-selected', 'ring-2', 'ring-red-500', 'z-10');
+                        
+                        // 清空已选择卡片列表
+                        gameState.selectedCards = [];
+                    }, 800);
+                }, 300);
+            }
+        }
+
+        // 开始秒表（计时模式）
+        function startStopwatch() {
+            gameState.timer = setInterval(() => {
+                gameState.seconds++;
+                updateTimerDisplay();
+            }, 1000);
+        }
+
+        // 开始倒计时
+        function startCountdown() {
+            gameState.timer = setInterval(() => {
+                gameState.countdownSeconds--;
+                
+                // 时间不足10秒时添加警告效果
+                if (gameState.countdownSeconds <= 10) {
+                    timerDisplay.classList.add('timer-warning');
+                } else {
+                    timerDisplay.classList.remove('timer-warning');
+                }
+                
+                updateTimerDisplay();
+                
+                // 倒计时结束
+                if (gameState.countdownSeconds <= 0) {
+                    endGame(false);
+                }
+            }, 1000);
+        }
+
+        // 更新计时器显示
+        function updateTimerDisplay() {
+            let seconds, minutes;
+            
+            if (gameState.timingMode === 'countdown') {
+                seconds = gameState.countdownSeconds;
+            } else {
+                seconds = gameState.seconds;
+            }
+            
+            minutes = Math.floor(seconds / 60);
+            seconds = seconds % 60;
+            timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // 结束游戏
+        function endGame(isSuccess) {
+            // 停止计时器
+            if (gameState.timer) {
+                clearInterval(gameState.timer);
+                gameState.timer = null;
+            }
+            
+            // 游戏结束状态
+            gameState.isPlaying = false;
+            
+            // 更新弹窗内容
+            if (isSuccess) {
+                // 成功完成游戏
+                gameOverTitle.textContent = '恭喜你！';
+                completionText.textContent = `你已完成所有${gameState.totalPairs}种元素的匹配`;
+                gameOverIcon.className = 'inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-3';
+                gameOverIcon.innerHTML = '<i class="fa fa-trophy text-2xl text-yellow-500"></i>';
+            } else {
+                // 未完成游戏（倒计时结束）
+                gameOverTitle.textContent = '时间到！';
+                completionText.textContent = `你完成了${gameState.matchedPairs}/${gameState.totalPairs}种元素的匹配`;
+                gameOverIcon.className = 'inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mb-3';
+                gameOverIcon.innerHTML = '<i class="fa fa-clock-o text-2xl text-red-500"></i>';
+            }
+            
+            // 显示最终统计数据
+            finalAttempts.textContent = gameState.attempts;
+            finalElementCount.textContent = gameState.totalPairs;
+            
+            // 显示最终时间
+            if (gameState.timingMode === 'countdown') {
+                finalTime.textContent = `${Math.floor(gameState.countdownSeconds / 60).toString().padStart(2, '0')}:${(gameState.countdownSeconds % 60).toString().padStart(2, '0')}`;
+            } else {
+                finalTime.textContent = `${Math.floor(gameState.seconds / 60).toString().padStart(2, '0')}:${(gameState.seconds % 60).toString().padStart(2, '0')}`;
+            }
+            
+            // 保存游戏记录
+            saveGameResult(isSuccess);
+            
+            // 显示游戏结束弹窗
+            gameOverModal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        // 保存游戏结果到本地存储
+        function saveGameResult(isSuccess) {
+            // 获取现有记录
+            let history = JSON.parse(localStorage.getItem('chemistryGameHistory') || '[]');
+            
+            // 创建新记录
+            const result = {
+                id: Date.now(),
+                date: new Date().toLocaleString(),
+                elementCount: gameState.totalPairs,
+                attempts: gameState.attempts,
+                isSuccess: isSuccess,
+                timingMode: gameState.timingMode,
+                time: gameState.timingMode === 'countdown' ? gameState.countdownSeconds : gameState.seconds,
+                originalCountdown: gameState.originalCountdown
+            };
+            
+            // 添加新记录到历史
+            history.unshift(result);
+            
+            // 限制历史记录数量为20条
+            if (history.length > 20) {
+                history = history.slice(0, 20);
+            }
+            
+            // 保存到本地存储
+            localStorage.setItem('chemistryGameHistory', JSON.stringify(history));
+            
+            // 更新历史记录显示
+            loadHistory();
+        }
+
+        // 加载历史记录
+        function loadHistory() {
+            // 获取现有记录
+            const history = JSON.parse(localStorage.getItem('chemistryGameHistory') || '[]');
+            
+            // 清空历史列表
+            historyList.innerHTML = '';
+            
+            // 检查是否有历史记录
+            if (history.length === 0) {
+                emptyHistory.classList.remove('hidden');
+                return;
+            }
+            
+            // 隐藏空历史提示
+            emptyHistory.classList.add('hidden');
+            
+            // 添加历史记录到列表
+            history.forEach(record => {
+                const historyItem = document.createElement('div');
+                historyItem.className = `bg-gray-50 rounded-lg p-3 ${record.isSuccess ? 'border-l-4 border-green-500' : 'border-l-4 border-red-500'}`;
+                
+                // 格式化时间显示
+                let timeDisplay;
+                if (record.timingMode === 'countdown') {
+                    const usedSeconds = record.originalCountdown - record.time;
+                    timeDisplay = `${Math.floor(usedSeconds / 60).toString().padStart(2, '0')}:${(usedSeconds % 60).toString().padStart(2, '0')}`;
+                } else if (record.timingMode === 'timed') {
+                    timeDisplay = `${Math.floor(record.time / 60).toString().padStart(2, '0')}:${(record.time % 60).toString().padStart(2, '0')}`;
+                } else {
+                    timeDisplay = '无计时';
+                }
+                
+                historyItem.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="font-medium ${record.isSuccess ? 'text-green-700' : 'text-red-700'}">
+                            ${record.isSuccess ? '完成挑战' : '未完成挑战'}
+                        </div>
+                        <div class="text-xs text-gray-500">${record.date}</div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                            <span class="text-gray-500">元素数量:</span>
+                            <span class="font-medium">${record.elementCount}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">尝试次数:</span>
+                            <span class="font-medium">${record.attempts}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">用时:</span>
+                            <span class="font-medium">${timeDisplay}</span>
+                        </div>
+                    </div>
+                `;
+                
+                historyList.appendChild(historyItem);
+            });
+        }
+
+        // 显示历史记录
+        function showHistory() {
+            historyModal.classList.remove('hidden');
+            setTimeout(() => {
+                historyModalContent.classList.remove('scale-95', 'opacity-0');
+                historyModalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        // 隐藏历史记录
+        function hideHistory() {
+            historyModalContent.classList.remove('scale-100', 'opacity-100');
+            historyModalContent.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                historyModal.classList.add('hidden');
+            }, 300);
+        }
+
+        // 清空历史记录
+        function clearHistory() {
+            if (confirm('确定要清空所有游戏记录吗？此操作不可恢复。')) {
+                localStorage.removeItem('chemistryGameHistory');
+                loadHistory();
+            }
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
